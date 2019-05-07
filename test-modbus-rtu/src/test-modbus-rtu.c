@@ -175,12 +175,14 @@ int set_baudrate(modbus_t *ctx, int baud_rate){
 
 int main(void) {
 
-	fprintf(stderr, "test-modbus-rtu v 0.35\n"
+	int br1=2400;
+	int br2=2400;
+	fprintf(stderr, "test-modbus-rtu v 0.37\n"
 			"Emplea libreria estatica libmodbus adaptada solo para RTU\n"
-			"prueba con dos slaves a diferente velocidad\n");
+			"anula la prueba con dos slaves a diferente velocidad\n");
 	int rc;
 	modbus_t *ctx;
-	ctx = modbus_new_rtu("/dev/ttyUSB0", 2400, 'N', 8, 1);
+	ctx = modbus_new_rtu("/dev/ttyUSB0", br1, 'N', 8, 1);
 	if (!ctx) {
 		fprintf(stderr, "Failed to create the context: %s\n",
 		modbus_strerror(errno));
@@ -192,10 +194,18 @@ int main(void) {
 		modbus_free(ctx);
 		exit(1);
 	}
+	//Set the Modbus address of the remote slave
+	rc=modbus_set_slave(ctx, 1);
+	if (rc == -1) {
+	    fprintf(stderr, "Invalid slave ID\n");
+	    modbus_free(ctx);
+	    return -1;
+	}
+
 
 #if 1
 	modbus_t *ctx2;
-	ctx2 = modbus_new_rtu("/dev/ttyUSB0", 2400, 'N', 8, 1);
+	ctx2 = modbus_new_rtu("/dev/ttyUSB0", br2, 'N', 8, 1);
 	if (!ctx2) {
 		fprintf(stderr, "Failed to create the context: %s\n",
 		modbus_strerror(errno));
@@ -211,15 +221,7 @@ int main(void) {
 	}
 #endif
 
-	//Set the Modbus address of the remote slave
-	rc=modbus_set_slave(ctx, 1);
-	if (rc == -1) {
-	    fprintf(stderr, "Invalid slave ID\n");
-	    modbus_free(ctx);
-	    return -1;
-	}
-
-#if 1
+#if 0
 	rc=modbus_set_slave(ctx2, 1);
 	modbus_set_slave(ctx2, 1);
 	if (rc == -1) {
@@ -249,6 +251,7 @@ int main(void) {
 
 	for (;;) {
 
+
 		num_faltas=espera_siguiente_segundo(fd_timer_segundo);
 		faltas_acumuladas+=num_faltas;
 		memset(reg, 0, sizeof(reg));
@@ -256,13 +259,15 @@ int main(void) {
 		char * tiempo;
 		tiempo=get_iso_time();
 
+#if 0
 		rc=modbus_set_slave(ctx, 1);
 			if (rc == -1) {
 			    fprintf(stderr, "Invalid slave ID\n");
 			    modbus_free(ctx);
 			    return -1;
 		}
-		set_baudrate(ctx,2400);
+#endif
+		//set_baudrate(ctx, br1);
 		//Read holding registers starting from address 0x00 (tension)
 		num = modbus_read_input_registers(ctx, 0x00, reg_solicitados, reg);
 		if (num != reg_solicitados) { // number of read registers is not the one expected
@@ -276,16 +281,19 @@ int main(void) {
 		printf("Tension: %03.0f  "   , pasar_4_bytes_a_float_2((unsigned char *) &reg[0]));
 		printf("Intensidad: %02.1f  ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x06]));
 
-		rc=modbus_set_slave(ctx2, 1);
+#if 0
+		rc=modbus_set_slave(ctx, 1);
 		if (rc == -1) {
 			    fprintf(stderr, "Invalid slave ID\n");
-			    modbus_free(ctx2);
+			    modbus_free(ctx);
 			    return -1;
 		}
-		set_baudrate(ctx2,2400);
-		//Read holding registers starting from address 0x46 (frecuencia)
+#endif
+		//set_baudrate(ctx,br2);
+
 		memset(reg, 0, sizeof(reg));
-		num = modbus_read_input_registers(ctx2, 0x46, reg_solicitados, reg);
+		//Read holding registers starting from address 0x46 (frecuencia)
+		num = modbus_read_input_registers(ctx, 0x46, reg_solicitados, reg);
 		if (num != reg_solicitados) { // number of read registers is not the one expected
 			fprintf(stderr, "%s Failed to read: %s\n", get_iso_time(), modbus_strerror(errno));
 			errores++;
@@ -299,6 +307,7 @@ int main(void) {
 
 		printf("tasaerror: %06.2f  ", errores/(float)lecturas );
 		printf("\r");
+
 	}
 
 	modbus_close(ctx);
